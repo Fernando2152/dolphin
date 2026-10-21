@@ -20,6 +20,12 @@ jobs:
         with:
           ref: armv7-opt
 
+      - name: Set up JDK 17 for Android SDK tools
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
