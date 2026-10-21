@@ -1,0 +1,108 @@
+name: Package Dolphin ARMv7 APK
+
+on:
+  push:
+    branches:
+      - armv7-opt
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: armv7-opt
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install legacy Android SDK prerequisites
+        shell: bash
+        run: |
+          set -e
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y libc6:i386 libstdc++6:i386 zlib1g:i386
+
+      - name: Install legacy Android SDK packages
+        shell: bash
+        run: |
+          set -e
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+          sdkmanager --sdk_root="$ANDROID_HOME" --include_obsolete \
+            "platforms;android-19" "build-tools;20.0.0"
+
+      - name: Download native library from successful run
+        uses: actions/download-artifact@v4
+        with:
+          name: dolphin-armv7-native
+          path: artifacts
+          repository: ${{ github.repository }}
+          run-id: 39673308169
+          github-token: ${{ github.token }}
+
+      - name: Prepare ARMv7 library
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f artifacts/libmain.so
+          file artifacts/libmain.so
+          file artifacts/libmain.so | grep -q 'ELF 32-bit.*ARM'
+          mkdir -p Source/Android/libs/armeabi-v7a
+          cp artifacts/libmain.so Source/Android/libs/armeabi-v7a/libmain.so
+
+      - name: Set up Java 7 for legacy Gradle
+        uses: actions/setup-java@v6
+        with:
+          distribution: zulu
+          java-version: '7'
+
+      - name: Build Android debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version
+          GRADLE_VERSION="1.12"
+          ZIP_PATH="$RUNNER_TEMP/gradle-${GRADLE_VERSION}-bin.zip"
+          curl -fL --retry 3 \
+            -o "$ZIP_PATH" \
+            "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
+          unzip -q "$ZIP_PATH" -d "$RUNNER_TEMP"
+          cd "$GITHUB_WORKSPACE/Source/Android"
+          "$RUNNER_TEMP/gradle-${GRADLE_VERSION}/bin/gradle" --no-daemon assembleDebug
+
+      - name: Verify and prepare APK artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_DIR="$GITHUB_WORKSPACE/Source/Android"
+          APK_PATH="$(find "$ANDROID_DIR/build" -type f -name '*.apk' \
+            ! -name '*unaligned*' ! -name '*androidTest*' -print -quit)"
+          if [ -z "$APK_PATH" ]; then
+            echo 'ERROR: no se encontró ningún APK.'
+            find "$ANDROID_DIR/build" -type f -name '*.apk' -print || true
+            exit 1
+          fi
+          unzip -l "$APK_PATH" > "$RUNNER_TEMP/apk-list.txt"
+          if ! grep -F 'lib/armeabi-v7a/libmain.so' "$RUNNER_TEMP/apk-list.txt" >/dev/null; then
+            echo 'ERROR: el APK no contiene lib/armeabi-v7a/libmain.so.'
+            grep -F 'libmain.so' "$RUNNER_TEMP/apk-list.txt" || true
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/apk-artifacts"
+          cp "$APK_PATH" "$GITHUB_WORKSPACE/apk-artifacts/Dolphin-ARMv7-debug.apk"
+          file "$GITHUB_WORKSPACE/apk-artifacts/Dolphin-ARMv7-debug.apk"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-armv7-apk
+          path: apk-artifacts/Dolphin-ARMv7-debug.apk
+          if-no-files-found: error
