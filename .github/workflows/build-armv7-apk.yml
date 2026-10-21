@@ -86,6 +86,7 @@ jobs:
             "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip"
           unzip -q "$ZIP_PATH" -d "$RUNNER_TEMP"
           cd "$GITHUB_WORKSPACE/Source/Android"
+          export GRADLE_OPTS="${GRADLE_OPTS:-} -Dhttps.protocols=TLSv1.2"
           "$RUNNER_TEMP/gradle-${GRADLE_VERSION}/bin/gradle" --no-daemon assembleDebug
 
       - name: Verify and prepare APK artifact
