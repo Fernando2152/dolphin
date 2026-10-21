@@ -43,7 +43,9 @@ jobs:
         shell: bash
         run: |
           set -e
+          set +o pipefail
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+          set -o pipefail
           sdkmanager --sdk_root="$ANDROID_HOME" --include_obsolete \
             "platforms;android-19" "build-tools;20.0.0"
 
