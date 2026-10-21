@@ -1,0 +1,101 @@
+name: Dolphin ARMv7 Native Build
+
+on:
+  push:
+    branches:
+      - armv7-opt
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-armv7:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Download source
+        uses: actions/checkout@v4
+        with:
+          ref: armv7-opt
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            p7zip-full \
+            file
+
+      - name: Download Android NDK r10c
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE="$RUNNER_TEMP/android-ndk-r10c-linux-x86_64.bin"
+
+          curl -fL --retry 3 \
+            -o "$ARCHIVE" \
+            https://dl.google.com/android/ndk/android-ndk-r10c-linux-x86_64.bin
+
+          7z x "$ARCHIVE" "-o$RUNNER_TEMP" -y
+
+          NDK_DIR="$RUNNER_TEMP/android-ndk-r10c"
+
+          test -f "$NDK_DIR/RELEASE.TXT"
+
+          cat "$NDK_DIR/RELEASE.TXT"
+
+          echo "ANDROID_NDK=$NDK_DIR" >> "$GITHUB_ENV"
+
+      - name: Configure ARMv7
+        run: |
+          cmake -S . -B build-armv7 \
+            -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/Source/Android/android.toolchain.cmake" \
+            -DANDROID_NDK="$ANDROID_NDK" \
+            -DANDROID_ABI=armeabi-v7a \
+            -DANDROID_NATIVE_API_LEVEL=android-19 \
+            -DANDROID_STL=stlport_static \
+            -DLIBRARY_OUTPUT_PATH_ROOT="$GITHUB_WORKSPACE" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISABLE_WX=ON \
+            -DENABLE_QT=OFF \
+            -DUSE_UPNP=OFF
+
+      - name: Compile native library
+        run: |
+          cmake --build build-armv7 --target main --parallel 2
+
+      - name: Verify ARMv7 library
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts
+
+          SO_PATH="$(find . -type f \
+            -path '*/armeabi-v7a/libmain.so' \
+            -print -quit)"
+
+          if [ -z "$SO_PATH" ]; then
+            echo "ERROR: libmain.so was not generated."
+            find . -name '*.so' -type f
+            exit 1
+          fi
+
+          file "$SO_PATH"
+
+          file "$SO_PATH" | grep -q 'ELF 32-bit.*ARM'
+
+          cp "$SO_PATH" artifacts/libmain.so
+
+      - name: Upload ARMv7 library
+        uses: actions/upload-artifact@v4
+        with:
+          name: dolphin-armv7-native
+          path: artifacts/libmain.so
+          if-no-files-found: error
+
+
