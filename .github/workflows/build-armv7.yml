@@ -54,6 +54,7 @@ jobs:
         run: |
           cmake -S . -B build-armv7 \
             -DCMAKE_TOOLCHAIN_FILE="$GITHUB_WORKSPACE/Source/Android/android.toolchain.cmake" \
+            -DCMAKE_MAKE_PROGRAM=/usr/bin/make \
             -DANDROID_NDK="$ANDROID_NDK" \
             -DANDROID_ABI=armeabi-v7a \
             -DANDROID_NATIVE_API_LEVEL=android-19 \
