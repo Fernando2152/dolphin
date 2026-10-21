@@ -58,7 +58,7 @@ jobs:
             -DANDROID_NDK="$ANDROID_NDK" \
             -DANDROID_ABI=armeabi-v7a \
             -DANDROID_NATIVE_API_LEVEL=android-19 \
-            -DANDROID_STL=stlport_static \
+            -DANDROID_STL=gnustl_static \
             -DLIBRARY_OUTPUT_PATH_ROOT="$GITHUB_WORKSPACE" \
             -DCMAKE_BUILD_TYPE=Release \
             -DDISABLE_WX=ON \
